@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	_ "github.com/denisenkom/go-mssqldb"
 )
@@ -14,20 +15,35 @@ func main() {
 	// Define command-line flags
 	sourceDBConn := flag.String("source", "", "Source database connection string")
 	targetDBConn := flag.String("target", "", "Target database connection string")
+	skipTables := flag.String("skip", "", "Comma-separated list of tables to skip")
+	bulkSize := flag.Int("bulk", 1000, "Number of rows to insert in bulk operations")
 
 	// Parse command-line arguments
 	flag.Parse()
 
-	// Validate that both flags are provided
+	// Validate that required flags are provided
 	if *sourceDBConn == "" || *targetDBConn == "" {
 		log.Fatalf("Both --source and --target flags are required")
 	}
 
-	// Run with provided connection strings
-	run(*sourceDBConn, *targetDBConn)
+	// Parse the skipTables flag into a string slice
+	skipTablesSlice := []string{}
+	if *skipTables != "" {
+		skipTablesSlice = strings.Split(*skipTables, ",")
+	}
+
+	// Start timer
+	startTime := time.Now()
+
+	// Run with provided connection strings, skip list, and bulk size
+	run(*sourceDBConn, *targetDBConn, skipTablesSlice, *bulkSize)
+
+	// End timer
+	elapsedTime := time.Since(startTime)
+	fmt.Printf("Database copied in %s\n", elapsedTime)
 }
 
-func run(source, target string) {
+func run(source, target string, ignoreTables []string, bulkSize int) {
 	sourceDB, err := sql.Open("mssql", source)
 	if err != nil {
 		log.Fatalf("Failed to connect to source database: %v", err)
@@ -47,8 +63,6 @@ func run(source, target string) {
 		log.Fatalf("Failed to retrieve tables: %v", err)
 	}
 
-	ignoreTables := []string{"ApiLogs", "Logs"}
-
 	// Retrieve existing tables in the target database
 	existingTables, err := getTables(targetDB)
 	if err != nil {
@@ -61,6 +75,7 @@ func run(source, target string) {
 		// Check if the table is already created in the target database
 		if contains(existingTables, table) {
 			fmt.Printf("Table %s already exists in target database. Skipping creation.\n", table)
+			continue
 		} else {
 			// Get schema for the table
 			schema, err := getTableSchema(sourceDB, table)
@@ -77,12 +92,12 @@ func run(source, target string) {
 
 		// Skip ignored tables
 		if contains(ignoreTables, table) {
-			fmt.Printf("Skipping data copy for ignored table: %s\n", table)
+			fmt.Printf("Table %s ignore. Skipping data copy.\n", table)
 			continue
 		}
 
 		// Copy data from source to target
-		if err := copyTableData(sourceDB, targetDB, table); err != nil {
+		if err := copyTableData(sourceDB, targetDB, table, bulkSize); err != nil {
 			if strings.Contains(err.Error(), "no source data") {
 				fmt.Printf("No data to copy for table %s.\n", table)
 				continue
@@ -111,11 +126,6 @@ func getTables(db *sql.DB) ([]string, error) {
 		FROM sys.tables
 		WHERE type = 'U';
     `
-	// query := `
-	//     SELECT TABLE_NAME
-	//     FROM INFORMATION_SCHEMA.TABLES
-	//     WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA = 'dbo'
-	// `
 
 	rows, err := db.Query(query)
 	if err != nil {
@@ -197,7 +207,7 @@ func removeItemByValue(slice []string, value string) ([]string, int) {
 	return slice, -1 // Return original slice and -1 if value is not found
 }
 
-func copyTableData(sourceDB, targetDB *sql.DB, table string) error {
+func copyTableData(sourceDB, targetDB *sql.DB, table string, bulkSize int) error {
 	rows, err := sourceDB.Query(fmt.Sprintf("SELECT * FROM [%s]", table))
 	if err != nil {
 		return fmt.Errorf("no source data: %v", err)
@@ -209,34 +219,66 @@ func copyTableData(sourceDB, targetDB *sql.DB, table string) error {
 		return err
 	}
 
-	values := make([]interface{}, len(columns))
-	valuePtrs := make([]interface{}, len(columns))
-	for i := range values {
-		valuePtrs[i] = &values[i]
+	columnsAfterRemoval, index := removeItemByValue(columns, "GeoLocation")
+
+	placeholders := make([]string, len(columnsAfterRemoval))
+	for i := range placeholders {
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
 	}
 
+	insertQuery := fmt.Sprintf("INSERT INTO [%s] (%s) VALUES ", table, join(surroundWithBrackets(columnsAfterRemoval), ", "))
+
+	var batchValues []interface{}
+	var rowPlaceholderGroups []string
+	currentParamCount := 0
+
 	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+
 		if err := rows.Scan(valuePtrs...); err != nil {
 			return err
 		}
 
-		placeholders := make([]string, len(columns))
-		for i := range placeholders {
-			placeholders[i] = fmt.Sprintf("$%d", i+1)
-		}
-
-		columns, index := removeItemByValue(columns, "GeoLocation")
-		placeholders = removeItem(placeholders, index)
 		values = removeInterfaceItem(values, index)
 
-		insertQuery := fmt.Sprintf("INSERT INTO [%s] (%s) VALUES (%s)", table, join(surroundWithBrackets(columns), ", "), join(placeholders, ", "))
+		rowPlaceholders := make([]string, len(values))
+		for i := range values {
+			rowPlaceholders[i] = fmt.Sprintf("$%d", len(batchValues)+i+1)
+		}
+		rowPlaceholders = removeItem(rowPlaceholders, index)
 
-		if _, err := targetDB.Exec(insertQuery, values...); err != nil {
-			fmt.Println(insertQuery)
-			fmt.Println(values)
+		batchValues = append(batchValues, values...)
+		rowPlaceholderGroups = append(rowPlaceholderGroups, fmt.Sprintf("(%s)", join(rowPlaceholders, ", ")))
+
+		currentParamCount += len(values)
+		if currentParamCount >= bulkSize-len(values) { // Batch limit reached
+			finalQuery := insertQuery + join(rowPlaceholderGroups, ", ")
+			if _, err := targetDB.Exec(finalQuery, batchValues...); err != nil {
+				fmt.Println(finalQuery)
+				fmt.Println(batchValues)
+				return err
+			}
+
+			// Reset for the next batch
+			batchValues = []interface{}{}
+			rowPlaceholderGroups = []string{}
+			currentParamCount = 0
+		}
+	}
+
+	// Handle remaining batch
+	if len(batchValues) > 0 {
+		finalQuery := insertQuery + join(rowPlaceholderGroups, ", ")
+		if _, err := targetDB.Exec(finalQuery, batchValues...); err != nil {
+			fmt.Println(finalQuery)
 			return err
 		}
 	}
+
 	return nil
 }
 
