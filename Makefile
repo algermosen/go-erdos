@@ -1,5 +1,5 @@
 run:
-	go run main.go --skip "ApiLogs,Logs,Empleados_bck" --bulk 100 --source "Data Source=NTTSQLTEST0005;Initial Catalog=SGADB_Reingenieria;User Id=gasociado;Password=hm46rChar200*;Min Pool Size=5;TrustServerCertificate=True;" --target "Data Source=localhost;Initial Catalog=SGACopy;User ID=sa;Password=P@ssword1;MultipleActiveResultSets=True;Connect Timeout=100;Encrypt=Disable;"
+	go run main.go --skip "table1,table2,table3" --bulk 100 --source "sqlDataSource" --target "sqlDataTarget"
 
 build:
 	@echo "Building for Linux..."
