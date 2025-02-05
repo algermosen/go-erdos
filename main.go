@@ -85,6 +85,7 @@ func run(source, target string, ignoreTables []string, bulkSize int) {
 
 			// Create table in target database
 			if _, err := targetDB.Exec(schema); err != nil {
+				fmt.Printf(schema)
 				log.Fatalf("Failed to create table %s in target database: %v", table, err)
 			}
 			fmt.Printf("Table %s created successfully.\n", table)
@@ -160,7 +161,7 @@ func getTableSchema(db *sql.DB, table string) (string, error) {
 					'[' + COLUMN_NAME + ']' + ' ' +
 					DATA_TYPE +
 					CASE
-						WHEN DATA_TYPE IN ('text', 'geography') THEN ''
+						WHEN DATA_TYPE IN ('text', 'geography', 'xml') THEN ''
 						WHEN CHARACTER_MAXIMUM_LENGTH = -1 THEN '(MAX)'
 						WHEN CHARACTER_MAXIMUM_LENGTH IS NOT NULL THEN '(' + CAST(CHARACTER_MAXIMUM_LENGTH AS VARCHAR) + ')'
 						WHEN DATA_TYPE IN ('decimal', 'numeric') THEN '(' + CAST(NUMERIC_PRECISION AS VARCHAR) + ',' + CAST(NUMERIC_SCALE AS VARCHAR) + ')'
@@ -219,14 +220,14 @@ func copyTableData(sourceDB, targetDB *sql.DB, table string, bulkSize int) error
 		return err
 	}
 
-	columnsAfterRemoval, index := removeItemByValue(columns, "GeoLocation")
+	// columnsAfterRemoval, index := removeItemByValue(columns, "GeoLocation")
 
-	placeholders := make([]string, len(columnsAfterRemoval))
+	placeholders := make([]string, len(columns))
 	for i := range placeholders {
 		placeholders[i] = fmt.Sprintf("$%d", i+1)
 	}
 
-	insertQuery := fmt.Sprintf("INSERT INTO [%s] (%s) VALUES ", table, join(surroundWithBrackets(columnsAfterRemoval), ", "))
+	insertQuery := fmt.Sprintf("INSERT INTO [%s] (%s) VALUES ", table, join(surroundWithBrackets(columns), ", "))
 
 	var batchValues []interface{}
 	var rowPlaceholderGroups []string
@@ -243,13 +244,13 @@ func copyTableData(sourceDB, targetDB *sql.DB, table string, bulkSize int) error
 			return err
 		}
 
-		values = removeInterfaceItem(values, index)
+		// values = removeInterfaceItem(values, index)
 
 		rowPlaceholders := make([]string, len(values))
 		for i := range values {
 			rowPlaceholders[i] = fmt.Sprintf("$%d", len(batchValues)+i+1)
 		}
-		rowPlaceholders = removeItem(rowPlaceholders, index)
+		// rowPlaceholders = removeItem(rowPlaceholders, index)
 
 		batchValues = append(batchValues, values...)
 		rowPlaceholderGroups = append(rowPlaceholderGroups, fmt.Sprintf("(%s)", join(rowPlaceholders, ", ")))
