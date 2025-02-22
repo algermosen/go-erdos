@@ -1,5 +1,10 @@
 dev:
-	go run main.go --skip "ApiLogs,Logs,Empleados_bck,Tbl_DDL_Change_Log,MobileApiLogs" --bulk 100 --source "Data Source=NTTSQLTEST0005;Initial Catalog=SGADB_Reingenieria;User Id=gasociado;Password=hm46rChar200*;Min Pool Size=5;TrustServerCertificate=True;" --target "Data Source=localhost;Initial Catalog=SGACopy;User ID=sa;Password=P@ssword1;MultipleActiveResultSets=True;Connect Timeout=100;"
+	go run main.go \
+	--skip "Empleados_bck,Tbl_DDL_Change_Log,MobileApiLogs" \
+	--skip-data "ApiLogs,Logs,MobileApiLogs" \
+	--bulk 100 \
+	--source "Data Source=localhost;Initial Catalog=SGACopy;User ID=sa;Password=P@ssword1;MultipleActiveResultSets=True;Connect Timeout=100;" \
+	--target "Data Source=localhost;Initial Catalog=SGACopy2;User ID=sa;Password=P@ssword1;MultipleActiveResultSets=True;Connect Timeout=100;"
 
 build:
 	@echo "Building for Linux..."
