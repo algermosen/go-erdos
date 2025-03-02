@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 )
@@ -24,14 +23,8 @@ Currently Supported Databases:
 	},
 }
 
-// Execute runs the root command
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println("Error:", err)
-		os.Exit(1)
-	}
-}
-
 func init() {
 	// Add global flags here if needed in the future
+	rootCmd.PersistentFlags().String("dbtype", "mssql", "Type of the database (mssql, mysql, postgres, sqlite) (default: mssql)")
+	rootCmd.PersistentFlags().String("conn", "", "Database connection string")
 }

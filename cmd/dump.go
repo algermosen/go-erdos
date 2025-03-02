@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"strings"
+	"os"
 
+	"github.com/algermosen/go-erdos/internal/apperrors"
+	"github.com/algermosen/go-erdos/util"
 	"github.com/spf13/cobra"
 )
 
@@ -23,20 +25,21 @@ Options:
 	Run: func(cmd *cobra.Command, args []string) {
 		// Retrieve flag values
 		connStr, _ := cmd.Flags().GetString("conn")
-		dbType, _ := cmd.Flags().GetString("db")
+		dbType, _ := cmd.Flags().GetString("dbtype")
 		include, _ := cmd.Flags().GetString("include")
 		skip, _ := cmd.Flags().GetString("skip")
 		skipData, _ := cmd.Flags().GetString("skip-data")
 		outputFile, _ := cmd.Flags().GetString("output")
 
 		// Validate required parameters
-		if connStr == "" {
-			log.Fatal("Error: --conn flag is required")
+		if util.IsEmpty(connStr) {
+			appLogger.Error(apperrors.New(apperrors.ErrInvalidInput, "--conn flag is required", nil))
+			os.Exit(1)
 		}
 
 		// Process the skip tables list
-		skipTables := strings.Split(skip, ",")
-		skipDataTables := strings.Split(skipData, ",")
+		skipTables := util.SplitAndTrim(skip, ",")
+		skipDataTables := util.SplitAndTrim(skipData, ",")
 
 		fmt.Println("Starting database dump with the following parameters:")
 		fmt.Println(" - Connection String:", connStr)
@@ -55,17 +58,7 @@ Options:
 			skipDataTables: skipDataTables,
 		}
 
-		// Call a handler function based on the selected database
-		switch dbType {
-		case "postgres":
-			dumpPostgres(options)
-		case "sqlite":
-			dumpSQLite(options)
-		case "mssql":
-			dumpMSSQL(options)
-		default:
-			log.Fatalf("Error: Unsupported database type '%s'", dbType)
-		}
+		handleDump(options)
 	},
 }
 
@@ -73,28 +66,42 @@ func init() {
 	rootCmd.AddCommand(dumpCmd)
 
 	// Define flags
-	dumpCmd.Flags().String("conn", "", "Connection string of the database (required)")
-	dumpCmd.Flags().String("db", "sqlite", "Type of database to use (options: postgres, sqlite, mssql) (default: sqlite)")
 	dumpCmd.Flags().String("include", "all", "What to include in the dump (options: all, content, data) (default: all)")
 	dumpCmd.Flags().String("skip", "", "Comma-separated list of objects/tables to ignore")
 	dumpCmd.Flags().String("skip-data", "", "Comma-separated list of objects/tables which data need to be ignored")
 	dumpCmd.Flags().String("output", "dump.sql", "File to save the database dump (default: dump.sql)")
 }
 
+func handleDump(options dumpOptions) error {
+	switch options.dbType {
+	case "postgres":
+		return dumpPostgres(options)
+	case "sqlite":
+		return dumpSQLite(options)
+	case "mssql":
+		return dumpMSSQL(options)
+	default:
+		msg := fmt.Sprintf("unsupported database type '%s'", options.dbType)
+		return apperrors.New(apperrors.ErrInvalidInput, msg, nil)
+	}
+}
+
 // Placeholder function for PostgreSQL dumping
-func dumpPostgres(options dumpOptions) {
+func dumpPostgres(options dumpOptions) error {
 	log.Println("Dumping PostgreSQL database...")
 	// Implement logic using pg_dump or go-pg
+	return nil
 }
 
 // Placeholder function for SQLite dumping
-func dumpSQLite(options dumpOptions) {
+func dumpSQLite(options dumpOptions) error {
 	log.Println("Dumping SQLite database...")
 	// Implement logic using native SQLite backup
+	return nil
 }
 
 // Placeholder function for MSSQL dumping
-func dumpMSSQL(options dumpOptions) {
+func dumpMSSQL(options dumpOptions) error {
 	log.Println("[Dumping MSSQL database]")
 	sourceDB, err := sql.Open("mssql", options.connStr)
 	if err != nil {
@@ -107,6 +114,7 @@ func dumpMSSQL(options dumpOptions) {
 	if err != nil {
 		log.Fatalf("Failed to retrieve tables: %v", err)
 	}
+	return nil
 }
 
 type dumpOptions struct {
