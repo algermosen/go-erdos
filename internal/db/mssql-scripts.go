@@ -1,5 +1,7 @@
 package db
 
+import "fmt"
+
 // SQL query constants.
 const (
 	mssqlQueryTableMappings = `
@@ -28,13 +30,35 @@ WHERE
 `
 
 	mssqlqQeryAnalyzeDependencies = `
+	SELECT DISTINCT
+        fk.TABLE_SCHEMA AS ChildSchema,
+        fk.TABLE_NAME AS ChildTable,
+        pk.TABLE_SCHEMA AS ParentSchema, 
+        pk.TABLE_NAME AS ParentTable 
+    FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc 
+    FULL JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS fk ON rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME 
+    FULL JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME
+    WHERE pk.TABLE_NAME IS NOT NULL
+    ORDER BY fk.TABLE_NAME ASC;
+	`
+
+	tableListQuery = `
 	SELECT 
-		fk.TABLE_SCHEMA AS ChildSchema,
-		fk.TABLE_NAME AS ChildTable,
-		pk.TABLE_SCHEMA AS ParentSchema, 
-		pk.TABLE_NAME AS ParentTable 
-	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc 
-	INNER JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS fk ON rc.CONSTRAINT_NAME = fk.CONSTRAINT_NAME 
-	INNER JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS pk ON rc.UNIQUE_CONSTRAINT_NAME = pk.CONSTRAINT_NAME;
+		TABLE_SCHEMA,
+		TABLE_NAME 
+	FROM 
+		INFORMATION_SCHEMA.TABLES 
+	WHERE 
+		TABLE_TYPE = 'BASE TABLE' 
+		AND TABLE_CATALOG = DB_NAME();
 	`
 )
+
+func GetCreateSchemaQuery(schemaName string) string {
+	return fmt.Sprintf(`
+IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '%s')
+BEGIN
+    EXEC('CREATE SCHEMA %s')
+END
+`, schemaName, schemaName)
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/algermosen/go-erdos/internal/apperrors"
 	"github.com/algermosen/go-erdos/internal/db"
@@ -110,10 +111,25 @@ func dumpMSSQL(options dumpOptions) error {
 	}
 	defer db.Close()
 	log.Println("[Database connected]")
+	var dump strings.Builder
+
 	schema, err := driver.DumpSchema(db)
 	if err != nil {
 		log.Fatalf("Failed to retrieve tables: %v", err)
 	}
+	dump.WriteString(schema + "\nGO;\n\n")
+
+	data, err := driver.DumpData(db, options.skipDataTables)
+	if err != nil {
+		log.Fatalf("Failed to retrieve tables: %v", err)
+	}
+	dump.WriteString(data + "\nGO;\n\n")
+
+	constraints, err := driver.DumpConstraints(db)
+	if err != nil {
+		log.Fatalf("Failed to retrieve tables: %v", err)
+	}
+	dump.WriteString(constraints + "\nGO;\n\n")
 
 	file, err := os.OpenFile(options.outputFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
@@ -121,11 +137,11 @@ func dumpMSSQL(options dumpOptions) error {
 	}
 	defer file.Close()
 
-	_, err = file.Write([]byte(schema))
+	_, err = file.Write([]byte(dump.String()))
 	if err != nil {
-		log.Fatalf("Failed to write schema dump file: %v", err)
+		log.Fatalf("Failed to write dump file: %v", err)
 	}
-	log.Printf("[Schema dump written to %s]", options.outputFile)
+	log.Printf("[Dump written to %s]", options.outputFile)
 
 	return nil
 }

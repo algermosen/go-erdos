@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -22,7 +23,36 @@ type DatabaseDriver interface {
 	DumpConstraints(db *sql.DB) (string, error)
 }
 
-type DependencyTree map[string][]string
+type DependencyTree map[TableName][]TableName
+type TableMapping map[TableName][]columnDef
+
+type TableName string
+
+func NewTableName(schema, table string) TableName {
+	if schema == "" {
+		schema = "dbo"
+	}
+	return TableName(FormatObjectName(schema, table))
+}
+
+func (t TableName) String() string {
+	return string(t)
+}
+
+func (t TableName) GetParts() (string, string) {
+	// Define a regex that matches strings like "[schema].[table]"
+	re := regexp.MustCompile(`^\[([^]]+)\]\.\[([^]]+)\]$`) // ([^]]+) matches any character except ']'
+	matches := re.FindStringSubmatch(t.String())
+	if len(matches) == 3 {
+		return matches[1], matches[2]
+	}
+	return "", ""
+}
+
+func (t TableName) IsEmpty() bool {
+	_, table := t.GetParts()
+	return strings.TrimSpace(table) == ""
+}
 
 func FormatObjectName(parts ...string) string {
 	var formatted []string
