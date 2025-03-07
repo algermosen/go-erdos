@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/algermosen/go-erdos/internal/apperrors"
+	"github.com/algermosen/go-erdos/internal/db"
 	"github.com/algermosen/go-erdos/util"
 	"github.com/spf13/cobra"
 )
@@ -69,7 +69,7 @@ func init() {
 	dumpCmd.Flags().String("include", "all", "What to include in the dump (options: all, content, data) (default: all)")
 	dumpCmd.Flags().String("skip", "", "Comma-separated list of objects/tables to ignore")
 	dumpCmd.Flags().String("skip-data", "", "Comma-separated list of objects/tables which data need to be ignored")
-	dumpCmd.Flags().String("output", "dump.sql", "File to save the database dump (default: dump.sql)")
+	dumpCmd.Flags().String("output", "./output/dump.sql", "File to save the database dump (default: dump.sql)")
 }
 
 func handleDump(options dumpOptions) error {
@@ -103,17 +103,30 @@ func dumpSQLite(options dumpOptions) error {
 // Placeholder function for MSSQL dumping
 func dumpMSSQL(options dumpOptions) error {
 	log.Println("[Dumping MSSQL database]")
-	sourceDB, err := sql.Open("mssql", options.connStr)
+	driver := db.MSSQLDriver{}
+	db, err := driver.Connect(options.connStr)
 	if err != nil {
 		log.Fatalf("Failed to connect to source database: %v", err)
 	}
-	defer sourceDB.Close()
+	defer db.Close()
 	log.Println("[Database connected]")
-
-	tables, err := getTables(sourceDB)
+	schema, err := driver.DumpSchema(db)
 	if err != nil {
 		log.Fatalf("Failed to retrieve tables: %v", err)
 	}
+
+	file, err := os.OpenFile(options.outputFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Fatalf("Failed to open (or create) schema dump file: %v", err)
+	}
+	defer file.Close()
+
+	_, err = file.Write([]byte(schema))
+	if err != nil {
+		log.Fatalf("Failed to write schema dump file: %v", err)
+	}
+	log.Printf("[Schema dump written to %s]", options.outputFile)
+
 	return nil
 }
 

@@ -1,6 +1,10 @@
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+)
 
 // DatabaseDriver defines the interface for all database drivers.
 // This interface abstracts the operations needed for the migration process.
@@ -16,4 +20,14 @@ type DatabaseDriver interface {
 
 	// DumpConstraints returns the SQL statements for recreating constraints such as primary keys, foreign keys, etc.
 	DumpConstraints(db *sql.DB) (string, error)
+}
+
+type DependencyTree map[string][]string
+
+func FormatObjectName(parts ...string) string {
+	var formatted []string
+	for _, part := range parts {
+		formatted = append(formatted, fmt.Sprintf("[%s]", part))
+	}
+	return strings.Join(formatted, ".")
 }

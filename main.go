@@ -2,45 +2,45 @@ package main
 
 import (
 	"database/sql"
-	"flag"
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
+	"github.com/algermosen/go-erdos/cmd"
 	_ "github.com/denisenkom/go-mssqldb"
 )
 
 func main() {
-	// Define command-line flags
-	sourceDBConn := flag.String("source", "", "Source database connection string")
-	targetDBConn := flag.String("target", "", "Target database connection string")
-	skipTables := flag.String("skip", "", "Comma-separated list of tables to skip")
-	bulkSize := flag.Int("bulk", 1000, "Number of rows to insert in bulk operations")
+	cmd.Execute()
+	// // Define command-line flags
+	// sourceDBConn := flag.String("source", "", "Source database connection string")
+	// targetDBConn := flag.String("target", "", "Target database connection string")
+	// skipTables := flag.String("skip", "", "Comma-separated list of tables to skip")
+	// bulkSize := flag.Int("bulk", 1000, "Number of rows to insert in bulk operations")
 
-	// Parse command-line arguments
-	flag.Parse()
+	// // Parse command-line arguments
+	// flag.Parse()
 
-	// Validate that required flags are provided
-	if *sourceDBConn == "" || *targetDBConn == "" {
-		log.Fatalf("Both --source and --target flags are required")
-	}
+	// // Validate that required flags are provided
+	// if *sourceDBConn == "" || *targetDBConn == "" {
+	// 	log.Fatalf("Both --source and --target flags are required")
+	// }
 
-	// Parse the skipTables flag into a string slice
-	skipTablesSlice := []string{}
-	if *skipTables != "" {
-		skipTablesSlice = strings.Split(*skipTables, ",")
-	}
+	// // Parse the skipTables flag into a string slice
+	// skipTablesSlice := []string{}
+	// if *skipTables != "" {
+	// 	skipTablesSlice = strings.Split(*skipTables, ",")
+	// }
 
-	// Start timer
-	startTime := time.Now()
+	// // Start timer
+	// startTime := time.Now()
 
-	// Run with provided connection strings, skip list, and bulk size
-	run(*sourceDBConn, *targetDBConn, skipTablesSlice, *bulkSize)
+	// // Run with provided connection strings, skip list, and bulk size
+	// run(*sourceDBConn, *targetDBConn, skipTablesSlice, *bulkSize)
 
-	// End timer
-	elapsedTime := time.Since(startTime)
-	fmt.Printf("Database copied in %s\n", elapsedTime)
+	// // End timer
+	// elapsedTime := time.Since(startTime)
+	// fmt.Printf("Database copied in %s\n", elapsedTime)
 }
 
 func run(source, target string, ignoreTables []string, bulkSize int) {

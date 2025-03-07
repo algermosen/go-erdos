@@ -2,9 +2,11 @@ package util
 
 import "strings"
 
+const TabSpace = "    " // 4 spaces
+
 func SplitAndTrim(input string, sep string) []string {
 	if IsEmpty(input) {
-		return make([]string, 0)
+		return []string{}
 	}
 	parts := strings.Split(input, sep)
 	results := make([]string, 0, len(parts))
