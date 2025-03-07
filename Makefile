@@ -1,11 +1,11 @@
 dump:
 	go run main.go dump \
-	--conn "Data Source=NTTSQLTEST0005;Initial Catalog=SGADB_Reingenieria;User Id=gasociado;Password=hm46rChar200*;Min Pool Size=5;" \
+	--conn "" \
 	--skip-data "ApiLogs,FormData"
 
 query:
 	go run main.go query \
-	--conn "Data Source=localhost;Initial Catalog=TEMP;User ID=sa;Password=P@ssword1;MultipleActiveResultSets=True;Connect Timeout=100;" \
+	--conn "" \
 	--query-file ./output/dump.sql
 
 build:
